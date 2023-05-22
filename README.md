@@ -28,7 +28,7 @@ Sensorimotor dependencies, Visual awareness, Continuous flash suppression, Virtu
 (they are loaded in the first chunk of each code file)
 - for each code file, run the analysis chunk by chunk in sequential order.
 
-The folder “_data” will contain both raw data files for each subject and the preprocessed data frames (the outputs from the preprocessing code files). The relevant data frames will be automatically read while running individual code files.
+The folder “_data” will contain both raw data files for each subject and the preprocessed data frames. The relevant data frames will be automatically read while running individual code files.
 
 The folder “_figures” will contain the main and supplementary plots.
 
