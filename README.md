@@ -1,6 +1,6 @@
 ## Investigating the role of sensorimotor spatial dependencies  in shaping conscious access to virtual 3D objects
 
-Paweł Motyka<sup>1</sup><sup>2</sup>, David J. Schwartzman<sup>3</sup>, Anil K. Seth<sup>3</sup><sup>4</sup>, Keisuke Suzuki<sup>3</sup><sup>5</sup>
+Paweł Motyka<sup>1</sup>,<sup>2</sup>, David J. Schwartzman<sup>3</sup>, Anil K. Seth<sup>3</sup>,<sup>4</sup>, Keisuke Suzuki<sup>3</sup>,<sup>5</sup>
 <br/>
 <br/>
 <sup>1</sup>Faculty of Psychology, University of Warsaw, Poland <br/>
