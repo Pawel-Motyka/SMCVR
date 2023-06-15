@@ -19,7 +19,7 @@ Our finding of no difference in the perception of stimuli moving in line with an
  </p>
 
 #### Keywords: 
-Sensorimotor dependencies, Visual awareness, Continuous flash suppression, Virtual Reality
+Sensorimotor dependencies, Visual awareness, Action, Continuous flash suppression, Virtual Reality
 
 #### Steps to reproduce the analysis:
 - download the entire repository as a zip-file 
