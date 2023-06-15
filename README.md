@@ -23,9 +23,8 @@ Sensorimotor dependencies, Visual awareness, Continuous flash suppression, Virtu
 
 #### Steps to reproduce the analysis:
 - download the entire repository as a zip-file 
-- open the relevant code files in the downloaded folder (not directly from R studio, as the “here” function is used for setting the directory)
-- make sure that you have all the required packages installed
-(they are loaded in the first chunk of each code file)
+- open the relevant code files in the downloaded folder (by clicking, i.e. not directly from R studio, as the “here” function is used for setting the directory)
+- make sure that you have all the required packages installed (they are loaded in the first chunk of each code file)
 - for each code file, run the analysis chunk by chunk in sequential order.
 
 The folder “_data” will contain both raw data files for each subject and the preprocessed data frames. The relevant data frames will be automatically read while running individual code files.
