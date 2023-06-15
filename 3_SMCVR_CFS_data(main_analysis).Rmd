@@ -1,0 +1,806 @@
+---
+title: <font size="5">**SMCVR - Continuous Flash Suppression data (main analysis)**</font> 
+author: <br> <font size="4"> Pawel Motyka (Polish Academy of Sciences) </font> <br>  *pmotyka@psych.pan.pl* 
+date: <font size="3"> April 2022  </font>
+output: html_document
+chunk_output_type: console
+editor_options: 
+  chunk_output_type: console
+--- 
+&nbsp;
+<font size="4">
+**List of sections**:
+
+1. Load the required packages and CFS data [S1](#S1)
+2. Hypothesis testing [S2](#S2)
+3. Visualization of the main results [S3](#S3)
+4. Block-by-block changes in detection times [S4](#S4)
+5. Particular objects - detection times [S5](#S5)
+6. Summary of responses (detection & identification) [S6](#S6)
+7. Identification times - conditions & objects [S7](#S7)
+8. Normalisation of the CFS data using the MAD [S8](#S8)
+
+<a name="S1"></a>
+&nbsp;
+
+#####**1. Load the required packages and CFS data** 
+
+```{r, message = FALSE, warning = FALSE}
+
+# load required packages
+library(dplyr, warn.conflicts = FALSE, quietly=TRUE)
+library(lattice, warn.conflicts = FALSE, quietly=TRUE)
+library(emmeans, warn.conflicts = FALSE, quietly=TRUE)
+library(tidyr, warn.conflicts = FALSE, quietly=TRUE)
+library(lme4, warn.conflicts = FALSE, quietly=TRUE)
+library(sjPlot, warn.conflicts = FALSE, quietly=TRUE)
+library(BayesFactor, warn.conflicts = FALSE, quietly=TRUE)
+library(Rmisc, warn.conflicts = FALSE, quietly=TRUE)
+library(gghalves, warn.conflicts = FALSE, quietly=TRUE)
+library(ggplot2, warn.conflicts = FALSE, quietly=TRUE)
+library(afex, warn.conflicts = FALSE, quietly=TRUE)
+library(here, warn.conflicts = FALSE, quietly=TRUE)
+
+# set working directory
+data_dir <- paste0(here(),"/_data")
+setwd(data_dir)
+#options(Encoding="UTF-8")
+
+# specify ID list
+ID_list <- c(1:48)
+
+# read individual data within the loop
+data <- NULL
+for (ID in ID_list) {
+log <- read.csv(paste('SMCVR_CFS_', ID, '.csv', sep=''), header = TRUE, sep = ",")
+data <- rbind(data, log)
+rm(log)
+}
+
+# remove training trials
+data <- data[data$training == "False",]
+data_all <- data
+
+# remove trials with falsely indentified stimuli
+data <- data[!(data$detected == "True" & data$accuracy == "False"),]
+
+
+```
+
+<a name="S2"></a>
+&nbsp;
+
+#####**2. Hypothesis testing** 
+
+```{r}
+
+# prepare data
+dt <- data %>% group_by(ID, condition) %>% dplyr::summarize(t_md = median(detection), t_m = mean(detection))
+
+
+### ANOVA Repeated measures (within factor: sensorimotor condition; dependent variable: average detection times)
+m <- aov_ez(id = "ID", dv = "t_md", within = "condition", data = dt, return = "nice")
+m # "return = nice" -> only to see GES values
+
+# show results
+m <- aov_ez(id = "ID", dv = "t_md", within = "condition", data = dt)
+summary(m)
+em <- emmeans(m, ~ condition)
+em
+
+# post-hoc comparisions (uncorrected p values)
+em_pairs <- pairs(em, adjust = "none")
+em_pairs
+
+# correct p values according to the preregistration
+p_val <- as.data.frame(em_pairs)
+p_val$p.value <- p_val$p.value * 3 # (Double check)
+p_val$p.value[p_val$p.value > 1] <- 1
+p_val
+
+
+### compute Bayes factors for respective comparisons (using default prior)
+#library(tidyr)
+db <- select(dt, ID, condition, t_md)
+db <- tidyr::pivot_wider(db, id_cols = ID, names_from = condition, values_from = t_md)
+
+## comparisons of interest
+
+ttestBF(db$Random, db$Novel, paired = T)
+  # robustness check
+  ttestBF(db$Random, db$Novel, paired = T, r = 0.354)
+  ttestBF(db$Random, db$Novel, paired = T, r = 1)
+
+ttestBF(db$Random, db$Congruent, paired = T)
+  # robustness check
+  ttestBF(db$Random, db$Congruent, paired = T, r = 0.354)
+  ttestBF(db$Random, db$Congruent, paired = T, r = 1)
+
+ttestBF(db$Random, db$Incongruent, paired = T)
+  # robustness check
+  ttestBF(db$Random, db$Incongruent, paired = T, r = 0.354)
+  ttestBF(db$Random, db$Incongruent, paired = T, r = 1)
+
+## exporatory comparisons
+ttestBF(db$Congruent, db$Novel, paired = T)
+ttestBF(db$Congruent, db$Incongruent, paired = T)
+ttestBF(db$Novel, db$Incongruent, paired = T)
+
+```
+
+<a name="S3"></a>
+&nbsp;
+
+#####**3. Visualization of the main results** 
+
+```{r}
+
+### prepare data for visualization
+d <- dt
+
+# rename factors to ordinal numbers
+d$condition_f[d$condition == "Congruent"] <- 4
+d$condition_f[d$condition == "Incongruent"] <- 3
+d$condition_f[d$condition == "Novel"] <- 2
+d$condition_f[d$condition == "Random"] <- 1
+d$pos <- jitter(d$condition_f, amount=.005) # earlier 0.005
+
+# get means
+score_mean_4 <- mean(d$t_md[d$condition == "Congruent"]  )
+score_mean_3 <- mean(d$t_md[d$condition == "Incongruent"])
+score_mean_2 <- mean(d$t_md[d$condition == "Novel"]      )
+score_mean_1 <- mean(d$t_md[d$condition == "Random"]     )
+
+# get medians
+score_median4 <- median(d$t_md[d$condition == "Congruent"]  )
+score_median3 <- median(d$t_md[d$condition == "Incongruent"])
+score_median2 <- median(d$t_md[d$condition == "Novel"]      )
+score_median1 <- median(d$t_md[d$condition == "Random"]     )
+
+# get standard deviations
+score_sd_4 <- sd(d$t_md[d$condition == "Congruent"]  )
+score_sd_3 <- sd(d$t_md[d$condition == "Incongruent"])
+score_sd_2 <- sd(d$t_md[d$condition == "Novel"]      )
+score_sd_1 <- sd(d$t_md[d$condition == "Random"]     )
+
+# get standard errors
+score_se_4 <- score_sd_4/sqrt(length(unique(d$ID))) 
+score_se_3 <- score_sd_3/sqrt(length(unique(d$ID)))
+score_se_2 <- score_sd_2/sqrt(length(unique(d$ID))) 
+score_se_1 <- score_sd_1/sqrt(length(unique(d$ID)))
+
+# get confidence intervals (95%)
+score_ci_4 <- CI(d$t_md[d$condition == "Congruent"]  , ci = 0.95)
+score_ci_3 <- CI(d$t_md[d$condition == "Incongruent"], ci = 0.95)
+score_ci_2 <- CI(d$t_md[d$condition == "Novel"]      , ci = 0.95)
+score_ci_1 <- CI(d$t_md[d$condition == "Random"]     , ci = 0.95)
+
+
+### Create data frame containing the descriptives
+group <- c("Random", "Novel", "Incongruent","Congruent")
+N <- c(length(unique(d$ID)), length(unique(d$ID)))
+score_mean <- c(score_mean_1, score_mean_2, score_mean_3, score_mean_4)
+score_median <- c(score_median1, score_median2, score_median3, score_median4)
+sd <- c(score_sd_1, score_sd_2, score_sd_3, score_sd_4)
+se <- c(score_se_1, score_se_2,score_se_3, score_se_4)
+ci <- c((score_ci_1[1] - score_ci_1[3]), (score_ci_2[1] - score_ci_2[3]), (score_ci_3[1] - score_ci_3[3]), (score_ci_4[1] - score_ci_4[3])) # [1] = upper CI, [3] = lower CI
+summary_df <- data.frame(group, N, score_mean, score_median, sd, se, ci)
+
+# specify colours
+con = rgb(.28,.13,.45, alpha = 0.7)
+opp = rgb(.18,.44,.56, alpha = 0.8)
+nov = rgb(.136,.553,.425, alpha = 0.8)
+ran = rgb(.70,.64,.15, alpha = 0.8)
+
+### plot results
+f1 <- ggplot(data = d, aes(y = t_md)) +
+
+# points
+    geom_point(data = d %>% filter(condition_f =="1"), aes(x = pos), color = ran, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+  geom_point(data = d %>% filter(condition_f =="2"), aes(x = pos), color = nov, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+    geom_point(data = d %>% filter(condition_f =="3"), aes(x = pos), color = opp, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+    geom_point(data = d %>% filter(condition_f =="4"), aes(x = pos), color = con, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+# violins
+  geom_half_violin(data = d %>% filter(condition_f=="1"),aes(x = condition_f, y = t_md), position = position_nudge(x = .0), width = 0.65, side = "r", fill = ran, colour = ran) +
+  
+  geom_half_violin(data = d %>% filter(condition_f=="2"),aes(x = condition_f, y = t_md), position = position_nudge(x= .0), width = 0.65, side = "r", fill = scales::alpha(nov,0.9),colour = scales::alpha(nov,0.9)) +
+  
+    geom_half_violin(data = d %>% filter(condition_f=="3"),aes(x = condition_f, y = t_md), position = position_nudge(x = .0), width = 0.65, side = "r", fill = scales::alpha(opp,0.9), colour = scales::alpha(opp,0.9)) +
+  
+  geom_half_violin(data = d %>% filter(condition_f=="4"),aes(x = condition_f, y = t_md), position = position_nudge(x= .0), width = 0.65, side = "r", fill = con, colour = con) +
+  
+# boxplots
+  geom_half_boxplot(data = d %>% filter(condition_f=="1"), aes(x=condition_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(ran,0.0)) +
+  
+  geom_half_boxplot(data = d %>% filter(condition_f=="2"), aes(x=condition_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(nov,0.0)) +
+  
+    geom_half_boxplot(data = d %>% filter(condition_f=="3"), aes(x=condition_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(opp,0.0)) +
+  
+    geom_half_boxplot(data = d %>% filter(condition_f=="4"), aes(x=condition_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(con,0.0)) +
+  
+# means and confidence intervals
+   geom_point(data = d %>% filter(condition_f=="1"), aes(x = condition_f, y = score_mean[1]), position = position_nudge(x = .13), color = "gray15", size = 2.1) +
+
+   geom_errorbar(data = d %>% filter(condition_f=="1"), aes(x = condition_f, y = score_mean[1], ymin = score_ci_1[3], ymax = score_ci_1[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+
+   geom_point(data = d %>% filter(condition_f=="2"), aes(x = condition_f, y = score_mean[2]), position = position_nudge(x = .13), color = "gray15", size = 2.1)+
+
+   geom_errorbar(data = d %>% filter(condition_f=="2"), aes(x = condition_f, y = score_mean[2], ymin = score_ci_2[3], ymax = score_ci_2[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+   
+  geom_point(data = d %>% filter(condition_f=="3"), aes(x = condition_f, y = score_mean[3]), position = position_nudge(x = .13), color = "gray15", size = 2.1) +
+
+   geom_errorbar(data = d %>% filter(condition_f=="3"), aes(x = condition_f, y = score_mean[3], ymin = score_ci_3[3], ymax = score_ci_3[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+
+   geom_point(data = d %>% filter(condition_f=="4"), aes(x = condition_f, y = score_mean[4]), position = position_nudge(x = .13), color = "gray15", size = 2.1)+
+
+   geom_errorbar(data = d %>% filter(condition_f=="4"), aes(x = condition_f, y = score_mean[4], ymin = score_ci_4[3], ymax = score_ci_4[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+  
+# other plot parameters
+  scale_x_continuous(breaks=c(1,2,3,4), labels=c("Random", "Novel", "Opposite", "Congruent")) + ylab("Breakthrough time") +
+   scale_y_continuous(breaks=c(0,1,2,3,4,5,6,7)) +
+  ggtitle(' ') +
+  theme_classic()+
+  coord_cartesian(ylim=c(0, 6)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(), axis.line = element_line(colour = "black"), axis.title = element_text(face="bold",size=12, colour = "black"), axis.text = element_text(face="bold",size=17.5, colour = "black"), legend.position = "none")
+
+f1 # export size: 5 x 6
+f1 + coord_flip(ylim = c(0,5.6)) # export size: 5 x 8
+
+# useful source/tutorial: https://github.com/jorvlan/open-visualizations/blob/master/R/repmes_tutorial_R.Rmd
+
+```
+
+<a name="S4"></a>
+&nbsp;
+
+#####**4. Block-by-block changes in detection times** 
+
+```{r}
+
+# specify colours
+mcol <- rgb(100, 100, 100, max = 255, alpha = 120)
+mcol <- rgb(.1,.1,.1, alpha = 0.7)
+
+# prepare data
+dt <- data
+
+dt <- dt %>% group_by(ID, block, condition) %>% dplyr::summarize(t_md = median(detection), t_m = mean(detection))
+
+levels(dt$condition)[levels(dt$condition)=="Incongruent"] <- "Opposite"
+
+# run anova (3 blocks x 4 conditions)
+m <- aov_ez(id = "ID", dv = "t_md", within = c("block", "condition"), data = dt, return = "nice")
+m
+
+m <- aov_ez(id = "ID", dv = "t_md", within = c("block", "condition"), data = dt)
+print(summary(m)) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+# post-hoc comparisons
+#em <- emmeans(m, ~ block)
+#print(em)
+#em_pairs <- pairs(em, adjust = "Bonferroni") # "none"
+#print(em_pairs)
+
+
+# plot results separately for different conditions
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+
+p <- xyplot(t_md ~ block, group = ID, data = dc, ty=c("l", "p"), ylim = c(0,8.1), main = paste(c), ylab = "Breakthrough time", scales=list(x=list(limits=c(0.8,3.2), at = 1:3, alternating=1, cex = 1.3), y=list(limits=c(0,8.2), at = 0:8, alternating=1, cex = 1.3)), panel = function(x, y, ...) {
+       panel.xyplot(x, y, ..., alpha = 0.7, lwd = 1.3)
+       panel.linejoin(x, y, fun = mean, horizontal = FALSE,
+       col= mcol, lty=1, lwd=6)})
+
+print(p)
+
+
+# run Anova separately for different conditions
+print(c)
+m <- aov_ez(id = "ID", dv = "t_md", within = "block", data = dc, return = "nice")
+print(m)
+m <- aov_ez(id = "ID", dv = "t_md", within = "block", data = dc)
+print(summary(m)) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+# post-comparisons
+em <- emmeans(m, ~ block)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") # "none"
+print(em_pairs)
+}
+
+### Run analysis for the last block only (mirrors the structure of section 2)
+
+dt <- data[data$block == 3,]
+
+# prepare data
+dt <- dt %>% group_by(ID, condition) %>% dplyr::summarize(t_md = median(detection), t_m = mean(detection))
+
+### ANOVA Repeated measures (within factor: sensorimotor condition; dependent variable: average detection times)
+m <- aov_ez(id = "ID", dv = "t_md", within = "condition", data = dt, return = "nice")
+m
+
+m <- aov_ez(id = "ID", dv = "t_md", within = "condition", data = dt)
+summary(m)
+em <- emmeans(m, ~ condition)
+em
+
+# post-hoc comparisions (uncorrected p values)
+em_pairs <- pairs(em, adjust = "none")
+em_pairs
+
+# correct p values according to the preregistration
+p_val <- as.data.frame(em_pairs)
+p_val$p.value <- p_val$p.value * 3 # (Double check)
+p_val$p.value[p_val$p.value > 1] <- 1
+p_val
+
+
+```
+
+<a name="S5"></a>
+&nbsp;
+
+#####**5. Particular objects - detection times**
+
+```{r}
+
+# specify colours
+mycol <- rgb(100, 100, 100, max = 255, alpha = 80)
+mcol <- rgb(100, 100, 100, max = 255, alpha = 120)
+
+# prepare data
+dt <- data
+dt <- dt %>% group_by(ID, obj_type) %>% dplyr::summarize(t_md = median(detection), t_m = mean(detection))
+
+# run ANOVA (within factor: object type)
+m <- aov_ez(id = "ID", dv = "t_md", within = "obj_type", data = dt, return = "nice")
+m
+m <- aov_ez(id = "ID", dv = "t_md", within = "obj_type", data = dt)
+summary(m)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ obj_type)
+em
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+em_pairs
+
+# plot results
+xyplot(t_md ~ obj_type, group = ID, data = dt, type = "b", ylim = c(0,6), scales=list(x=list(limits=c(0.8,4.2), at = 1:4,labels=c("obj type 1","obj type 2","obj type 3","obj type 4"), alternating=1)))
+
+# Optional plots
+#boxplot(t_md ~ obj_type, data = dt, lwd = 1, ylab = 'detection time', ylim = c(0,7.2))
+#stripchart(detection ~ obj_type, vertical = TRUE, data = data, method = "jitter", add = TRUE, pch = 16, cex = 0.3, col = mycol)
+
+
+### Block-by-block changes for different objects
+dt <- data
+dt <- dt %>% group_by(ID, block, obj_type) %>% dplyr::summarize(t_md = median(detection), t_m = mean(detection))
+
+# run Aanova (3 blocks x 4 objects)
+m <- aov_ez(id = "ID", dv = "t_md", within = c("block", "obj_type"), data = dt, return = "nice")
+m
+
+m <- aov_ez(id = "ID", dv = "t_md", within = c("block", "obj_type"), data = dt)
+print(summary(m)) # degrees of freedom: levels - 1, (subjects - 1) * (levels - 1)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ block)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") # "none"
+print(em_pairs)
+
+# plot results separately for different objects
+for (o in unique(dt$obj_type)) {
+dc <- dt[dt$obj_type == o,]
+
+p <- xyplot(t_md ~ block, group = ID, data = dc, ty=c("l", "p"), ylim = c(0,7), main = paste(o), scales=list(x=list(limits=c(0.8,3.2), at = 1:3, alternating=1)), panel = function(x, y, ...) {
+       panel.xyplot(x, y, ..., alpha = 0.7, lwd = 1.3)
+       panel.linejoin(x, y, fun = mean, horizontal = FALSE,
+       col= mcol, lty=1, lwd=6)})
+
+print(p)
+}
+
+
+### create raincloud plot (see section 3 for more details)
+
+dt <- data %>% group_by(ID, obj_type) %>% dplyr::summarize(t_md = median(detection), t_m = mean(detection))
+
+d <- dt
+d$obj_type_f[d$obj_type == "1"] <- 4
+d$obj_type_f[d$obj_type == "2"] <- 3
+d$obj_type_f[d$obj_type == "3"] <- 2
+d$obj_type_f[d$obj_type == "4"] <- 1
+d$pos <- jitter(d$obj_type_f, amount=.005) 
+
+score_mean_4 <- mean(d$t_md[d$obj_type == "1"]  )
+score_mean_3 <- mean(d$t_md[d$obj_type == "2"])
+score_mean_2 <- mean(d$t_md[d$obj_type == "3"]      )
+score_mean_1 <- mean(d$t_md[d$obj_type == "4"]     )
+score_median4 <- median(d$t_md[d$obj_type == "1"]  )
+score_median3 <- median(d$t_md[d$obj_type == "2"])
+score_median2 <- median(d$t_md[d$obj_type == "3"]      )
+score_median1 <- median(d$t_md[d$obj_type == "4"]     )
+score_sd_4 <- sd(d$t_md[d$obj_type == "1"]  )
+score_sd_3 <- sd(d$t_md[d$obj_type == "2"])
+score_sd_2 <- sd(d$t_md[d$obj_type == "3"]      )
+score_sd_1 <- sd(d$t_md[d$obj_type == "4"]     )
+score_se_4 <- score_sd_4/sqrt(length(unique(d$ID))) 
+score_se_3 <- score_sd_3/sqrt(length(unique(d$ID)))
+score_se_2 <- score_sd_2/sqrt(length(unique(d$ID))) 
+score_se_1 <- score_sd_1/sqrt(length(unique(d$ID)))
+score_ci_4 <- CI(d$t_md[d$obj_type == "1"]  , ci = 0.95)
+score_ci_3 <- CI(d$t_md[d$obj_type == "2"], ci = 0.95)
+score_ci_2 <- CI(d$t_md[d$obj_type == "3"]      , ci = 0.95)
+score_ci_1 <- CI(d$t_md[d$obj_type == "4"]     , ci = 0.95)
+
+# create data frame containing the descriptives
+group <- c("4", "3",  "2","1")
+N <- c(length(unique(d$ID)), length(unique(d$ID)))
+score_mean <- c(score_mean_1, score_mean_2, score_mean_3, score_mean_4)
+score_median <- c(score_median1, score_median2, score_median3, score_median4)
+sd <- c(score_sd_1, score_sd_2, score_sd_3, score_sd_4)
+se <- c(score_se_1, score_se_2,score_se_3, score_se_4)
+ci <- c((score_ci_1[1] - score_ci_1[3]), (score_ci_2[1] - score_ci_2[3]), (score_ci_3[1] - score_ci_3[3]), (score_ci_4[1] - score_ci_4[3]))
+summary_df <- data.frame(group, N, score_mean, score_median, sd, se, ci)
+
+# specify colours
+con = rgb(.4,.4,.4, alpha = 0.8)
+opp = rgb(.4,.4,.4, alpha = 0.8)
+nov = rgb(.4,.4,.4, alpha = 0.8)
+ran = rgb(.4,.4,.4, alpha = 0.8)
+
+# plot results
+f1 <- ggplot(data = d, aes(y = t_md)) +
+
+# points 
+    geom_point(data = d %>% filter(obj_type_f =="1"), aes(x = pos), color = ran, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+  geom_point(data = d %>% filter(obj_type_f =="2"), aes(x = pos), color = nov, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+    geom_point(data = d %>% filter(obj_type_f =="3"), aes(x = pos), color = opp, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+    geom_point(data = d %>% filter(obj_type_f =="4"), aes(x = pos), color = con, size = 1.7, alpha = .6, position = position_nudge(x = -0.15)) +
+  
+# violins
+  geom_half_violin(data = d %>% filter(obj_type_f=="1"),aes(x = obj_type_f, y = t_md), position = position_nudge(x = .0), width = 0.65, side = "r", fill = ran, colour = ran) +
+  
+  geom_half_violin(data = d %>% filter(obj_type_f=="2"),aes(x = obj_type_f, y = t_md), position = position_nudge(x= .0), width = 0.65, side = "r", fill = nov,colour = nov) +
+  
+    geom_half_violin(data = d %>% filter(obj_type_f=="3"),aes(x = obj_type_f, y = t_md), position = position_nudge(x = .0), width = 0.65, side = "r", fill = opp, colour = opp) +
+  
+  geom_half_violin(data = d %>% filter(obj_type_f=="4"),aes(x = obj_type_f, y = t_md), position = position_nudge(x= .0), width = 0.65, side = "r", fill = con, colour = con) +
+  
+# boxplots
+  geom_half_boxplot(data = d %>% filter(obj_type_f=="1"), aes(x=obj_type_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(ran,0.0)) +
+  
+  geom_half_boxplot(data = d %>% filter(obj_type_f=="2"), aes(x=obj_type_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(nov,0.0)) +
+  
+    geom_half_boxplot(data = d %>% filter(obj_type_f=="3"), aes(x=obj_type_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(opp,0.0)) +
+  
+    geom_half_boxplot(data = d %>% filter(obj_type_f=="4"), aes(x=obj_type_f, y = t_md), position = position_nudge(x = .04), side = "l",outlier.shape = NA, center = TRUE, errorbar.draw = FALSE, width = .17, fill = scales::alpha(con,0.0)) +
+  
+## means and confidence intervals
+   geom_point(data = d %>% filter(obj_type_f=="1"), aes(x = obj_type_f, y = score_mean[1]), position = position_nudge(x = .13), color = "gray15", size = 2.1) +
+
+   geom_errorbar(data = d %>% filter(obj_type_f=="1"), aes(x = obj_type_f, y = score_mean[1], ymin = score_ci_1[3], ymax = score_ci_1[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+
+   geom_point(data = d %>% filter(obj_type_f=="2"), aes(x = obj_type_f, y = score_mean[2]), position = position_nudge(x = .13), color = "gray15", size = 2.1)+
+
+   geom_errorbar(data = d %>% filter(obj_type_f=="2"), aes(x = obj_type_f, y = score_mean[2], ymin = score_ci_2[3], ymax = score_ci_2[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+   
+  geom_point(data = d %>% filter(obj_type_f=="3"), aes(x = obj_type_f, y = score_mean[3]), position = position_nudge(x = .13), color = "gray15", size = 2.1) +
+
+   geom_errorbar(data = d %>% filter(obj_type_f=="3"), aes(x = obj_type_f, y = score_mean[3], ymin = score_ci_3[3], ymax = score_ci_3[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+
+   geom_point(data = d %>% filter(obj_type_f=="4"), aes(x = obj_type_f, y = score_mean[4]), position = position_nudge(x = .13), color = "gray15", size = 2.1)+
+
+   geom_errorbar(data = d %>% filter(obj_type_f=="4"), aes(x = obj_type_f, y = score_mean[4], ymin = score_ci_4[3], ymax = score_ci_4[1]), position = position_nudge(.13), color = "gray15", width = 0.07, size = 0.5, alpha = .5) +
+
+# other parameters
+  scale_x_continuous(breaks=c(1,2,3,4), labels=c("Object 4", "Object 3", "Object 2", "Object 1")) + ylab("Breakthrough time") +
+   scale_y_continuous(breaks=c(0,1,2,3,4,5,6,7)) +
+  ggtitle(' ') +
+  theme_classic()+
+  coord_cartesian(ylim=c(0, 6)) + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(), axis.line = element_line(colour = "black"), axis.title = element_text(face="bold",size=12, colour = "black"), axis.text = element_text(face="bold",size=17.5, colour = "black"), legend.position = "none")
+
+f1 # export size: 5 x 6
+
+f1 + coord_flip(ylim = c(0,5.6)) # 5 x 8
+
+```
+
+
+<a name="S6"></a>
+&nbsp;
+
+#####**6. Summary of responses (detection & identification)** 
+
+```{r}
+
+# bring back the data including trials with incorrect identification
+d <- data_all
+
+### Proportion of trials with detected and undetected objects
+p_detected <- (round(length(d$ID[d$detected == "True"]) / nrow(d), 3)) * 100
+p_detected
+p_missed <- (round(length(d$ID[d$detected == "False"]) / nrow(d), 3)) * 100
+p_missed 
+
+# visualise proportions
+dr1 <- data.frame(Detected = c("Yes", "No"), Proportion = c(p_detected, p_missed))
+dr1 <- dr1 %>% mutate(Resp1 = "Response 1")
+ggplot(dr1, aes(x = Resp1, y = Proportion, fill = Detected)) +
+  geom_col() +
+  scale_fill_manual(values = c("gray46", "gray80"), aesthetics = "fill") +
+  theme_minimal(base_size = 16) +
+  ylab("Percentage") + xlab(NULL) + theme_void() + theme(legend.position="top") 
+
+
+### Trials with detection: proportion of correctly and icorrectly identfied objects
+p_identified <- round(length(d$ID[d$detected == "True" & d$accuracy == "True"]) / length(d$ID[d$detected == "True"]), 3) * 100
+p_identified
+p_incorrect <- round(length(d$ID[d$detected == "True" & d$accuracy == "False"]) / length(d$ID[d$detected == "True"]), 3) * 100
+p_incorrect
+
+# visualise proportions
+dr2d <- data.frame(Identified = c("Yes", "No"), Proportion = c(p_identified, p_incorrect))
+dr2d <- dr2d %>% mutate(Resp2 = "Response 2")
+
+ggplot(dr2d, aes(x = Resp2, y = Proportion, fill = Identified)) +
+  geom_col() +
+  scale_fill_manual(values = c("#4D8198", "#BA7A5F"), aesthetics = "fill") +
+  theme_minimal(base_size = 16) +
+  ylab("Percentage") + xlab(NULL) + theme_void() + theme(legend.position="top") 
+
+
+### Trials without detection: proportion of correctly and icorrectly identfied objects
+p_guessed <- round(length(d$ID[d$detected == "False" & d$accuracy == "True"]) / length(d$ID[d$detected == "False"]), 3) * 100
+p_guessed
+p_not_guessed <- round(length(d$ID[d$detected == "False" & d$accuracy == "False"]) / length(d$ID[d$detected == "False"]), 3) * 100
+p_not_guessed
+
+# chi-square (using numbers of observations and expected proportions)
+guessed <- length(d$ID[d$detected == "False" & d$accuracy == "True"])
+not_guessed <- length(d$ID[d$detected == "False" & d$accuracy == "False"])
+chisq.test(c(not_guessed,guessed), p = c(0.75,0.25)) # 25% chance level (4 objects)
+
+# visualise proportions
+dr2u <- data.frame(Identified = c("Yes", "No"), Proportion = c(p_guessed, p_not_guessed))
+dr2u <- dr2u %>% mutate(Resp2 = "Response 2")
+
+ggplot(dr2u, aes(x = Resp2, y = Proportion, fill = Identified)) +
+  geom_col() +
+  scale_fill_manual(values = c("#4D8198", "#BA7A5F"), aesthetics = "fill") +
+  theme_minimal(base_size = 16) +
+  ylab("Percentage") + xlab(NULL) + theme_void() + theme(legend.position="top") + 
+  geom_hline(yintercept=25, lty = 2) # dotted line - chance level
+
+
+## under which conditions accurate identification was more likely to occur despite the absence of detection (optional analysis - these analyses should viewed with caution due to small number of trials)
+
+dt <- data[(data$detected == "False" & data$accuracy == "True"),]
+dtc <- select(dt, condition)
+dtc <- table(dtc$condition)
+chisq.test(dtc)
+
+# visualise proportions
+dtc <- as.data.frame(dtc)
+ggplot(dtc, aes(x = Var1, y = Freq)) +
+  geom_col(color = "gray100") +
+  scale_fill_manual(values = "gray10", aesthetics = "fill") +
+  theme_minimal(base_size = 16) +
+  ylab("Percentage") + xlab(NULL) + theme_void() + theme(legend.position="top") + 
+  geom_hline(yintercept= 91/4, lty = 2, lwd = 1.5)
+
+## for which objects accurate identification was more likely to occur despite the absence of detection (optional analysis - these analyses should viewed with caution due to small number of trials)
+dto <- select(dt, obj_type)
+dto <- table(dto$obj_type)
+chisq.test(dto)
+dto <- as.data.frame(dto)
+
+# visualise proportions
+ggplot(dto, aes(x = Var1, y = Freq)) +
+  geom_col(color = "gray100") +
+  scale_fill_manual(values = "gray10", aesthetics = "fill") +
+  theme_minimal(base_size = 16) +
+  ylab("Percentage") + xlab(NULL) + theme_void() + theme(legend.position="top") + 
+  geom_hline(yintercept= 91/4, lty = 2, lwd = 1.5)
+
+
+### Trials with detection, but icorrectly identified objects
+
+dt <- data_all[(data_all$detected == "True" & data_all$accuracy == "False"),]
+
+## under which conditions inaccurate identification was more likely to occur despite detection (optional analysis - these analyses should viewed with caution due to small number of trials)
+
+dtc <- select(dt, condition)
+dtc <- table(dtc$condition)
+chisq.test(dtc)
+dtc <- as.data.frame(dtc)
+
+# visualise proportions
+ggplot(dtc, aes(x = Var1, y = Freq)) +
+  geom_col(color = "gray100") +
+  scale_fill_manual(values = "gray10", aesthetics = "fill") +
+  theme_minimal(base_size = 16) +
+  ylab("Percentage") + xlab(NULL) + theme_void() + theme(legend.position="top") + 
+  geom_hline(yintercept=31.2, lty = 2, lwd = 1.5)
+
+## for which objects inaccurate identification was more likely to occur despite detection (optional analysis - these analyses should viewed with caution due to small number of trials)
+dto <- select(dt, obj_type)
+dto <- table(dto$obj_type)
+chisq.test(dto)
+dto <- as.data.frame(dto)
+
+# visualise proportions
+ggplot(dto, aes(x = Var1, y = Freq)) +
+  geom_col(color = "gray100") +
+  scale_fill_manual(values = "gray10", aesthetics = "fill") +
+  theme_minimal(base_size = 16) +
+  ylab("Percentage") + xlab(NULL) + theme_void() + theme(legend.position="top") + 
+  geom_hline(yintercept=31.5, lty = 2, lwd = 1.5)
+
+
+### Proportions of specific responses (averaged across subjects)
+responses <- data.frame(ID = integer(0),
+                        detection = numeric(0),
+                        identification_after_detection = numeric(0),
+                        errors_after_detection = numeric(0),
+                        identification_without_detection = numeric(0))
+
+ for (i in unique(data_all$ID)) {
+ ds <- data_all[data_all$ID == i,]
+ 
+  det <- (round(length(ds$ID[ds$detected == "True"]) / nrow(ds), 4)) * 100
+  
+  i1 <- (length(ds$ID[ds$detected == "True" & ds$accuracy == "True"]) / length(ds$ID[ds$detected == "True"])) * 100
+  
+  errors <- 100 - i1
+  
+  i2 <- (length(ds$ID[ds$detected == "False" & ds$accuracy == "True"]) / length(ds$ID[ds$detected == "False"])) * 100
+  
+ responses[nrow(responses)+1,] <- c(ID, det, i1, errors, i2)
+ }
+
+### summary stats
+# detection
+mean(responses$detection)
+sd(responses$detection)
+
+# identification after detection (reverse of errors)
+mean(responses$identification_after_detection)
+sd(responses$identification_after_detection)
+
+# errors after detection
+mean(responses$errors_after_detection)
+sd(responses$errors_after_detection)
+
+# identifcation without detection (skipping NaN for some subjects)
+mean(responses$identification_without_detection, na.rm = T)
+sd(responses$identification_without_detection, na.rm = T)
+
+
+### Optional analysis: association between vertical jitter & detection times (no effects)
+vertical_jitter_detection <- data.frame(ID = integer(0),
+                              correlation = numeric(0))
+
+ for (i in unique(data$ID)) {
+ #ds <- data[data$ID == i,]
+ # optional to see scatter smooths
+ #s <- scatter.smooth(ds$vertical_pos, ds$detection)
+ #c <- cor.test(ds$vertical_pos, ds$detection, method = "spearman")
+ #c <- c$estimate
+ #print(c)
+ 
+ #vertical_jitter_detection[nrow(vertical_jitter_detection)+1,] <- c(ID, c)
+ }
+
+mean(vertical_jitter_detection$correlation)
+sd(vertical_jitter_detection$correlation)
+
+```
+
+
+<a name="S7"></a>
+&nbsp;
+
+#####**7. Identification times - conditions & objects**
+
+```{r}
+
+## Conditions
+
+# prepare data
+dt <- data %>% group_by(ID, condition) %>% dplyr::summarize(t_md = median(decision_time))
+levels(dt$condition)[levels(dt$condition)=="Incongruent"] <- "Opposite"
+
+# differences between conditions
+m <- aov_ez(id = "ID", dv = "t_md", within = "condition", data = dt, return = "nice")
+m
+
+m <- aov_ez(id = "ID", dv = "t_md", within = "condition", data = dt)
+summary(m)
+
+# simple plot
+boxplot(t_md ~ condition, data = dt, lwd = 1, ylab = 'Decision time (2nd response)', ylim = c(0, 2))
+
+# summary stats
+dt <- data %>% group_by(ID) %>% dplyr::summarize(t_md = median(decision_time))
+mean(dt$t_md)
+sd(dt$t_md)
+
+
+## Objects
+dt <- data %>% group_by(ID, obj_type) %>% dplyr::summarize(t_md = median(decision_time))
+
+# differences between objects
+m <- aov_ez(id = "ID", dv = "t_md", within = "obj_type", data = dt, return = "nice")
+m
+
+m <- aov_ez(id = "ID", dv = "t_md", within = "obj_type", data = dt)
+summary(m)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ obj_type)
+em
+em_pairs <- pairs(em, adjust = "Bonferroni")
+em_pairs
+
+# simple plot
+boxplot(t_md ~ obj_type, data = dt, lwd = 1, ylab = 'Decision time (2nd response)', ylim = c(0, 2.5), col = "gray")
+means <- tapply(dt$t_md, dt$obj_type, mean)
+points(x = 1:length(means), y = means, col = "black", pch = 19)
+
+```
+
+
+<a name="S8"></a>
+&nbsp;
+
+#####**8. Normalisation of the CFS data using the median absolute deviation** 
+
+```{r}
+
+### The normalised data are used in subsequent analyses of the relationship between detection times and sensorimotor mastery performance
+
+## Two alternative methods: one can either use constant = 1.4826 in the calculation of MAD  OR  multiply the scores by 0.6745 towards the end (both methods produce equivalent results), useful sources: (1) https://stats.stackexchange.com/questions/523865/calculating-robust-z-scores-with-median-and-mad / using MAD function; (2) https://hausetutorials.netlify.app/posts/2019-10-07-outlier-detection-with-median-absolute-deviation/ / step by step
+
+dat = data
+dt1 = data.frame()
+
+for (i in unique(dat$ID)) {
+ds <- dat[dat$ID == i,]
+#print(paste("####ID#####", i))
+md <- median(ds$detection)
+#print(md)
+mad <- mad(ds$detection, constant = 1.4826)
+
+for (t in unique(ds$onset_timestamp)) {
+ds$n_detection[ds$onset_timestamp == t] <- (ds$detection[ds$onset_timestamp == t] - md) / mad
+}
+# optional to see histograms
+# h<- hist(ds$n_detection, breaks = 20, xlim = c(-6,6))
+dt1 <- rbind(dt1, ds)
+}
+
+hist(dt1$n_detection, breaks = 70)
+
+
+### Prepare and save preprocessed normalised data
+
+## Including separate blocks
+cfs <- dt1 %>% group_by(ID, block, condition) %>% dplyr::summarize(time = median(detection), time_n = mean(n_detection), time_nmd = median(n_detection))
+#write.table(cfs, file = "smcvr_cfs_normalised.csv" )
+
+## Aggregated blocks
+cfs_ID <- dt1 %>% group_by(ID, condition) %>% dplyr::summarize(time = median(detection), time_n = mean(n_detection), time_nmd = median(n_detection))
+#write.table(cfs_ID, file = "smcvr_cfs_ID_normalised.csv" )
+
+```
+
+
+

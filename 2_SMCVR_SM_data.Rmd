@@ -1,0 +1,741 @@
+---
+title: <font size="5">**SMCVR -- Sensorimotor Mastery Tasks data**</font> 
+author: <br> <font size="4"> Pawel Motyka (Polish Academy of Sciences) </font> <br>  *pmotyka@psych.pan.pl* 
+date: <font size="3"> September 2022  </font>
+output: html_document
+chunk_output_type: console
+
+--- 
+&nbsp;
+<font size="4">
+**List of sections**:
+
+1. Load the required packages and data [S1](#S1)
+2. Performance under different sensorimotor conditions - Moving Target version [S2](#S2)
+3. Performance under different sensorimotor conditions - Static Target version [S3](#S3)
+4. Performance for different visual objects (Moving & Static versions) [S4](#S4)
+5. Block-by-block changes in performance (Moving & Static versions) [S5](#S5)
+6. Relationship between performance in Moving and Static Target versions [S6](#S6)
+7. Relationship between performance and speed of actions [S7](#S7)
+8. Merging CFS and Sensorimotor Mastery data [S8](#S8)
+
+<a name="S1"></a>
+&nbsp;
+
+#####**1. Load the required packages and data** 
+
+```{r, message = FALSE, warning = FALSE}
+
+# load packages
+library(here, warn.conflicts = FALSE, quietly=TRUE)
+library(dplyr, warn.conflicts = FALSE, quietly=TRUE)
+library(lattice, warn.conflicts = FALSE, quietly=TRUE)
+library(tidyr, warn.conflicts = FALSE, quietly=TRUE)
+library(afex, warn.conflicts = FALSE, quietly=TRUE)
+library(emmeans, warn.conflicts = FALSE, quietly=TRUE)
+library(ggpubr, warn.conflicts = FALSE, quietly=TRUE)
+
+# set working directory
+data_dir <- paste0(here(),"/_data")
+setwd(data_dir)
+
+# read preprocessed data (takes a while)
+dm <- read.table(file = "smcvr_smc_moving.csv" )
+ds <- read.table(file = "smcvr_smc_static.csv" )
+
+# Optional step: recreate preprocessed data by reading individual data files within the loop (to do this, change F to T)
+Read_raw_data = F 
+
+if (Read_raw_data == T) {
+
+  ### Recreate from raw data
+# specify ID list
+ID_list <- c(1:48)
+dm <- NULL
+ds <- NULL
+for (ID in ID_list) {
+print(ID)
+
+# read individual dataframes within the loop
+log_dm <- read.csv(paste('SMCVR_SMC_moving_', ID, '.csv', sep=''), header = TRUE, sep = ",")
+log_ds <- read.csv(paste('SMCVR_SMC_static_', ID, '.csv', sep=''), header = TRUE, sep = ",")
+
+dm <- rbind(dm, log_dm)
+ds <- rbind(ds, log_ds)
+}
+
+# remove training trials
+dm <- dm[dm$training == "False",]
+ds <- ds[ds$training == "False",]
+#write.table(dm, file = "smcvr_smc_moving.csv" )
+#write.table(ds, file = "smcvr_smc_static.csv" ) 
+}
+
+
+# define colours to be used
+con = rgb(.28,.13,.45, alpha = 0.65)
+opp = rgb(.18,.44,.56, alpha = 0.8)
+nov = rgb(.136,.553,.425, alpha = 0.8)
+ran = rgb(.70,.64,.15, alpha = 0.8)
+dark = rgb(.1,.1,.1, alpha = 0.9)
+
+conL = rgb(.28,.13,.45, alpha = 0.4)
+oppL = rgb(.18,.44,.56, alpha = 0.5)
+novL = rgb(.136,.553,.425, alpha = 0.5)
+ranL = rgb(.70,.64,.15, alpha = 0.5)
+
+mycol <- rgb(100, 100, 100, max = 255, alpha = 80)
+mcol <- rgb(100, 100, 100, max = 255, alpha = 120)
+  
+
+# read normalised CFS data (to be merged into a new data file)
+cfs <- read.table(file = "smcvr_cfs_normalised.csv")
+cfs_ID <- read.table(file = "smcvr_cfs_ID_normalised.csv")
+
+```
+
+<a name="S2"></a>
+&nbsp;
+
+#####**2. Performance under different sensorimotor conditions (Moving Target version)** 
+
+```{r}
+
+### prepare data
+dt <- dm %>% group_by(ID, condition) %>% dplyr::summarize(d_md = median(distance), d_m = mean(distance))
+dt <- select(dt, ID, condition,d_md)
+dt$d_md <- dt$d_md * 100 # cm 
+dp <- tidyr::pivot_wider(dt, names_from = condition, values_from = d_md)
+
+
+### analyze differences
+m <- aov_ez(id = "ID", dv = "d_md", within = "condition", data = dt, return = "nice")
+m # "return = nice" -> only to see GES values
+
+m <- aov_ez(id = "ID", dv = "d_md", within = "condition", data = dt)
+summary(m) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+### post-hoc comparisons
+em <- emmeans(m, ~ condition)
+em
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+em_pairs
+
+
+### visualise results
+cond1 <- dp$Congruent
+cond2 <- dp$Incongruent
+cond3 <- dp$Novel
+cond4 <- dp$Random
+
+# greater margins, optionally: subplots mfrow
+par(mar=c(1.1,5.1,1.1,1.1),mfrow=c(1,1))
+
+# horizontal jitter across each condition
+x <- jitter(rep(0,length(cond2)), factor = 0.4) # narrower
+
+# plotting area
+plot(x, cond2, ylim=c(0,max(c(cond1,cond2,cond3,cond4))*1.1), xlim=c(-.25,.25), type="n", ylab="Distance", xlab=NA, xaxt="n", cex.lab=2, cex.axis=1.5)
+ 
+# Plot individual lines
+for (i in 1:length(cond2)){
+	points( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=c(con,opp,nov,ran),bg=c(conL,oppL,novL,ranL), pch=21 )
+	lines( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=rgb(.5,.5,.5,alpha=.5) )
+}
+
+# calculate means
+means <- colMeans(cbind(cond1,cond2,cond3,cond4))
+
+# plot means
+lines( c(-.192,-.168), rep(means[1],2), lwd=3.5, col = dark, lty = 1)
+lines( c(-.072,-.048), rep(means[2],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.048,.072), rep(means[3],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.168,.192), rep(means[4],2), lwd=3.5,col = dark, lty = 1)
+
+# optional dots
+#points(-.18, means[1], cex = 1.2, pch = 21, col = "black", bg = dark)
+#points(-.06, means[2], cex = 1.2, pch = 21, col = "black", bg = dark)
+#points(.06, means[3], cex = 1.2, pch = 21, col = "black",  bg = dark)
+#points(.18, means[4], cex = 1.2, pch = 21, col = "black",  bg = dark)
+
+# export 4.5 x 5.6 cm
+
+
+
+```
+
+<a name="S3"></a>
+&nbsp;
+
+#####**3. Performance under different sensorimotor conditions (Static Target version)** 
+
+```{r}
+
+### prepare data
+dss <- ds %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1) # take the last row from each trial to get the number of hits
+
+dss <- dss %>% group_by(ID, condition) %>% dplyr::summarize(h_m = mean(target_num), h_md = median(target_num))
+dt <- dss
+
+
+## analyze differences
+m <- aov_ez(id = "ID", dv = "h_m", within = "condition", data = dt, return = "nice")
+m # only to see GES values
+
+m <- aov_ez(id = "ID", dv = "h_m", within = "condition", data = dt)
+summary(m) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ condition)
+em
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+em_pairs
+
+
+### visualise results
+dt <- select(dt, ID, condition,h_m)
+dp <- tidyr::pivot_wider(dt, names_from = condition, values_from = h_m)
+
+cond1 <- dp$Congruent
+cond2 <- dp$Incongruent
+cond3 <- dp$Novel
+cond4 <- dp$Random
+
+# greater margins, optionally: subplots mfrow
+par(mar=c(4.1,5.1,1.1,1.1),mfrow=c(1,1))
+
+# horizontal jitter across each condition
+x <- jitter(rep(0,length(cond2)), factor = 0.4) # narrower
+
+# plotting area
+plot(x, cond2, ylim=c(0,max(c(cond1,cond2,cond3,cond4))*1.1), xlim=c(-.25,.25), type="n", ylab="Hits", xlab=NA, xaxt="n", yaxt="n", cex.lab=2, cex.axis=1.5)
+
+y_ticks <- c(0,6,12,18)  
+axis(side = 2, at = y_ticks, labels = y_ticks, cex.axis = 1.5)
+
+# Plot individual lines
+for (i in 1:length(cond2)){
+	points( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=c(con,opp,nov,ran),bg=c(conL,oppL,novL,ranL), pch=21 )
+	lines( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=rgb(.5,.5,.5,alpha=.5) )
+}
+
+# calculate means
+means <- colMeans(cbind(cond1,cond2,cond3,cond4))
+
+# plot means
+lines( c(-.192,-.168), rep(means[1],2), lwd=3.5, col = dark, lty = 1)
+lines( c(-.072,-.048), rep(means[2],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.048,.072), rep(means[3],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.168,.192), rep(means[4],2), lwd=3.5,col = dark, lty = 1)
+
+# optional dots
+#points(-.18, means[1], cex = 1.2, pch = 21, col = "black", bg = dark)
+#points(-.06, means[2], cex = 1.2, pch = 21, col = "black", bg = dark)
+#points(.06, means[3], cex = 1.2, pch = 21, col = "black",  bg = dark)
+#points(.18, means[4], cex = 1.2, pch = 21, col = "black",  bg = dark)
+
+# export 5 x 5.5 cm
+
+```
+
+<a name="S4"></a>
+&nbsp;
+
+#####**4. Performance for different visual objects (Moving & Static versions)** 
+
+```{r}
+
+### Moving Target Version
+ 
+## prepare data
+dt <- dm %>% group_by(ID, obj_type) %>% dplyr::summarize(d_md = median(distance))
+dt <- select(dt, ID, obj_type,d_md)
+dt$d_md <- dt$d_md * 100
+
+## Analyze differences
+m <- aov_ez(id = "ID", dv = "d_md", within = "obj_type", data = dt, return = "nice")
+m # only to see GES values
+
+m <- aov_ez(id = "ID", dv = "d_md", within = "obj_type", data = dt)
+summary(m) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ obj_type)
+em
+em_pairs <- pairs(em, adjust = "Bonferroni")
+em_pairs
+
+# visualise results
+dt$obj_type[dt$obj_type == 1] <- "O1"
+dt$obj_type[dt$obj_type == 2] <- "O2"
+dt$obj_type[dt$obj_type == 3] <- "O3"
+dt$obj_type[dt$obj_type == 4] <- "O4"
+
+dp <- tidyr::pivot_wider(dt, names_from = obj_type, values_from = d_md)
+
+cond1 <- dp$O1
+cond2 <- dp$O2
+cond3 <- dp$O3
+cond4 <- dp$O4
+
+# greater margins, optionally: subplots mfrow
+par(mar=c(1.1,5.1,1.1,1.1),mfrow=c(1,1))
+
+# horizontal jitter across each condition
+x <- jitter(rep(0,length(cond2)), factor = 0.4) # narrower
+
+# plotting area
+plot(x, cond2, ylim=c(0,max(c(cond1,cond2,cond3,cond4))*1.1), xlim=c(-.25,.25), type="n", ylab="Distance", xlab=NA, xaxt="n", cex.lab=2, cex.axis=1.5)
+ 
+# Plot individual lines
+for (i in 1:length(cond2)){
+
+	points( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=c(con,opp,nov,ran),bg=c(conL,oppL,novL,ranL), pch=21 )
+	lines( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=rgb(.5,.5,.5,alpha=.5) )
+}
+
+# calculate means
+means <- colMeans(cbind(cond1,cond2,cond3,cond4))
+
+# plot means
+lines( c(-.192,-.168), rep(means[1],2), lwd=3.5, col = dark, lty = 1)
+lines( c(-.072,-.048), rep(means[2],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.048,.072), rep(means[3],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.168,.192), rep(means[4],2), lwd=3.5,col = dark, lty = 1)
+
+
+### Static Target Version
+
+dss <- ds %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+dss <- dss %>% group_by(ID, obj_type) %>% dplyr::summarize(h_m = mean(target_num))
+dt <- dss
+
+
+## analyze differences
+m <- aov_ez(id = "ID", dv = "h_m", within = "obj_type", data = dt, return = "nice")
+m # only to see GES values
+
+m <- aov_ez(id = "ID", dv = "h_m", within = "obj_type", data = dt)
+summary(m) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ obj_type)
+em
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+em_pairs
+
+
+### visualise results
+dt$obj_type[dt$obj_type == 1] <- "O1"
+dt$obj_type[dt$obj_type == 2] <- "O2"
+dt$obj_type[dt$obj_type == 3] <- "O3"
+dt$obj_type[dt$obj_type == 4] <- "O4"
+
+dp <- tidyr::pivot_wider(dt, names_from = obj_type, values_from = h_m)
+
+cond1 <- dp$O1
+cond2 <- dp$O2
+cond3 <- dp$O3
+cond4 <- dp$O4
+
+# greater margins, optionally: subplots mfrow
+par(mar=c(4.1,5.1,1.1,1.1),mfrow=c(1,1))
+
+# horizontal jitter across each condition
+x <- jitter(rep(0,length(cond2)), factor = 0.4) # narrower
+
+# plotting area
+plot(x, cond2, ylim=c(0,max(c(cond1,cond2,cond3,cond4))*1.1), xlim=c(-.25,.25), type="n", ylab="Hits", xlab=NA, xaxt="n", yaxt = "n", cex.lab=2, cex.axis=1.5)
+
+y_ticks <- c(0,6,12,18)  
+axis(side = 2, at = y_ticks, labels = y_ticks, cex.axis = 1.5)
+
+# Plot individual lines
+for (i in 1:length(cond2)){
+
+	points( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=c(con,opp,nov,ran),bg=c(conL,oppL,novL,ranL), pch=21 )
+	lines( x[i]+c(-0.18,-0.06,0.06,0.18), cbind(cond1,cond2,cond3,cond4)[i,], col=rgb(.5,.5,.5,alpha=.5) )
+	
+}
+
+# Calculate and present means
+means <- colMeans(cbind(cond1,cond2,cond3,cond4))
+
+lines( c(-.192,-.168), rep(means[1],2), lwd=3.5, col = dark, lty = 1)
+lines( c(-.072,-.048), rep(means[2],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.048,.072), rep(means[3],2), lwd=3.5, col = dark, lty = 1)
+lines( c(.168,.192), rep(means[4],2), lwd=3.5,col = dark, lty = 1)
+
+```
+
+<a name="S5"></a>
+&nbsp;
+
+#####**5. Block-by-block changes in performance (Moving & Static versions) ** 
+
+```{r}
+
+# specify colours
+mycol <- rgb(100, 100, 100, max = 255, alpha = 80)
+mcol <- rgb(100, 100, 100, max = 255, alpha = 120)
+mcol <- rgb(.1,.1,.1, alpha = 0.7)
+
+
+### Moving Target Version
+
+dmm <- dm %>% group_by(ID, block, condition) %>% dplyr::summarize(d_m = mean(distance), d_md = median(distance))
+
+dt <- dmm
+
+dt$d_md <- dt$d_md * 100
+levels(dt$condition)[levels(dt$condition)=="Incongruent"] <- "Opposite"
+
+
+# the most general analysis: ANOVA (3 blocks x 4 conditions)
+m <- aov_ez(id = "ID", dv = "d_md", within = c("block", "condition"), data = dt)
+m
+print(summary(m)) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ block * condition)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") # "none"
+#print(em_pairs) # very large list - overalps with the analysis below
+
+
+# conditions assessed separately (blocks-split)
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+
+p <- xyplot(d_md ~ block, group = ID, data = dc, ty=c("l", "p"), ylab = "distance to target", ylim = c(0,9.5), main = paste(c), scales=list(x=list(limits=c(0.8,3.2), at = 1:3, alternating=1, cex = 1.3), y=list(cex = 1.3)), panel = function(x, y, ...) {
+       panel.xyplot(x, y, ..., alpha = 0.85, lwd = 1.3)
+       panel.linejoin(x, y, fun = mean, horizontal = FALSE,
+       col= mcol, lty=1, lwd=6)})
+
+# export 4 x 4 cm
+print(p)
+print(c)
+
+m <- aov_ez(id = "ID", dv = "d_md", within = "block", data = dc, return = "nice")
+print(m)
+m <- aov_ez(id = "ID", dv = "d_md", within = "block", data = dc)
+print(summary(m)) 
+
+
+#post-hoc comparisons
+em <- emmeans(m, ~ block)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+print(em_pairs)
+}
+
+
+### Static Target Version
+
+dss <- ds %>%
+    
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+
+dss <- dss %>% group_by(ID, block, condition) %>% dplyr::summarize(h_m = mean(target_num), h_md = median(target_num)) # md i m the same
+
+dt <- dss
+levels(dt$condition)[levels(dt$condition)=="Incongruent"] <- "Opposite"
+
+# the most general analysis: ANOVA (3 blocks x 4 conditions)
+m <- aov_ez(id = "ID", dv = "h_m", within = c("block", "condition"), data = dt)
+m
+print(summary(m)) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+# post-hoc comparisons
+em <- emmeans(m, ~ block)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+# print(em_pairs) # very large list - overalps with the analysis below
+
+
+# conditions assessed separately (blocks-split)
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+
+p <- xyplot(h_m ~ block, group = ID, data = dc, ty=c("l", "p"),  ylab = "hits on target", ylim = c(0,20), main = paste(c), scales=list(x=list(limits=c(0.8,3.2), at = 1:3, alternating=1, cex = 1.3), y=list(cex = 1.3)), panel = function(x, y, ...) {
+       panel.xyplot(x, y, ..., alpha = 0.85, lwd = 1.3)
+       panel.linejoin(x, y, fun = mean, horizontal = FALSE,
+       col= mcol, lty=1, lwd=6)})
+
+print(p)
+print(c)
+
+m <- aov_ez(id = "ID", dv = "h_m", within = "block", data = dc, return = "nice")
+print(m)
+m <- aov_ez(id = "ID", dv = "h_m", within = "block", data = dc)
+print(summary(m)) 
+
+#post-hoc comparisons
+em <- emmeans(m, ~ block)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+print(em_pairs)
+}
+
+```
+
+<a name="S6"></a>
+&nbsp;
+
+#####**6. Relationship between performance in the Moving and Static Target versions** 
+
+
+```{r}
+
+# get chance level line
+maxdev <- max(dm$distance)
+chance_level = maxdev/2
+
+# prepare Moving Target data
+dmm <- dm %>% group_by(ID, block, condition) %>% dplyr::summarize(d_m = mean(distance), d_md = median(distance))
+
+# prepare Static Target data
+dss <- ds %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+dss <- dss %>% group_by(ID, block, condition) %>% dplyr::summarize(hits = mean(target_num))
+
+# merge data from both versions
+dd <- merge(dmm, dss, by = c("ID", "block", "condition"))
+
+# basic exploration - subjects x blocks (optional)
+dt <- dd
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+#print(c)
+#print(shapiro.test(dc$d_md))
+#print(shapiro.test(dc$hits))
+#print(cor.test(dc$d_md, dc$hits, method = "spearman"))
+#scatter.smooth(dc$d_md, dc$hits, xlim = c(0.0, 0.1), ylim = c(0, 15),main = paste(c), xlab = "distance to target", ylab = "hits")
+}
+
+
+### Subject level data
+dmS <- dmm %>% group_by(ID, condition) %>% dplyr::summarize(d_m = mean(d_m), d_md = mean(d_md))
+dsS <- dss %>% group_by(ID, condition) %>% dplyr::summarize(hits = mean(hits))
+DD <- merge(dmS, dsS, by = c("ID", "condition"))
+
+scatter.smooth(DD$d_md, DD$hits, xlim = c(0.0, 0.08), ylim = c(0, 15), xlab = "distance to target", ylab = "hits")
+
+dt <- DD
+dt$d_md <- dt$d_md * 100
+
+## analyze relationship
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+print(c)
+print(shapiro.test(dc$d_md))
+print(shapiro.test(dc$hits))
+print(cor.test(dc$d_md, dc$hits, method = "spearman"))
+#scatter.smooth(dc$d_md, dc$hits, xlim = c(0.0, 0.1), ylim = c(0, 15),main = paste(c), xlab = "distance to target", ylab = "hits")
+}
+
+
+### Visualise data
+sp <- ggscatter(dt, x = "d_md", y = "hits",
+  ellipse = T, ellipse.level = 0.9, ellipse.type = "t", # norm/euclid #level095
+  ellipse.alpha = 0.2, ellipse.border.remove = T,
+  #add = "reg.line",             # Add regression line
+  #conf.int = T,                # Add confidence interval
+  color = "condition", size = c(2.2), alpha = 0.7, # Color by groups
+  palette = c(con,opp,nov,ran), 
+  shape = "condition") + scale_shape_manual(values=c(19, 15, 17, 23)) 
+sp
+
+# export: 4.1 x 4.6 (1.8 point size)
+# export: 4.7 x 5.3 (2.2 point size)
+
+```
+
+<a name="S7"></a>
+&nbsp;
+
+#####**7. Relationship between performance and speed of actions** 
+
+```{r}
+
+### Moving Target - prepare speed of action data
+dmm_speed <- dm %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+dmm_speed <- select(dmm_speed, ID, condition, speed_average)
+dmm_speed <- dmm_speed %>% group_by(ID, condition) %>% dplyr::summarize(speed = mean(speed_average))
+
+
+dmm <- dm %>% group_by(ID, condition) %>% dplyr::summarize(d_md = median(distance))
+dmC <- merge(dmm, dmm_speed, by = c("ID", "condition"))
+dm_s <- dmC # speed data
+
+## differences in speed of actions between sensorimotor conditions
+levels(dm_s$condition)[levels(dm_s$condition)=="Incongruent"] <- "Opposite"
+m <- aov_ez(id = "ID", dv = "speed", within = "condition", data = dm_s)
+m
+print(summary(m)) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+#post-hoc comparisons
+em <- emmeans(m, ~ condition)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+print(em_pairs)
+
+# visualise results
+xyplot(speed ~ condition, group = ID, data = dm_s, ylab = "Speed of manual action", ty=c("l", "p"), ylim = c(0,2.3), panel = function(x, y, ...) {
+       panel.xyplot(x, y, ..., alpha = 0.7, lwd = 1.3)
+       panel.linejoin(x, y, fun = mean, horizontal = FALSE,
+       col= mcol, lty=1, lwd=6)})
+
+
+# speed & performance at different sensorimotor conditions
+par(mar=c(2.1,2.1,1.1,1.1),mfrow=c(2,2))
+dt <- dm_s 
+dt$d_md <- dt$d_md *100
+
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+
+print(c)
+
+print(shapiro.test(dc$speed))
+test <- shapiro.test(dc$speed)
+norm1 <- (test$p.value > 0.05)
+
+print(shapiro.test(dc$d_md))
+test <- shapiro.test(dc$d_md)
+norm2 <- (test$p.value > 0.05)
+
+ifelse((norm1 == FALSE | norm2 == FALSE), R_method <- "spearman", R_method <- "pearson")
+
+cor <- cor.test(dc$speed, dc$d_md, method = R_method, exact = F)
+print(cor)
+p_val <- round(cor$p.value, 3)
+p <- scatter.smooth(dc$speed, dc$d_md, ylim = c(0,8), main = paste(c, " p =", p_val), xlab = "Speed", ylab = "Distance to target")
+p
+}
+
+### Static Target - prepare speed of action data
+dss_speed <- ds %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+dss_speed <- select(dss_speed, ID, condition, speed_average)
+dss_speed <- dss_speed %>% group_by(ID, condition) %>% dplyr::summarize(speed = mean(speed_average))
+
+dss <- ds %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+
+dss <- dss %>% group_by(ID, condition) %>% dplyr::summarize(h_m = mean(target_num), h_md = median(target_num))
+
+dsC <- merge(dss, dss_speed, by = c("ID", "condition"))
+
+# speed at different conditions (general)
+ds_s <- dsC %>% group_by(ID, condition) %>% dplyr::summarise(hits = mean(h_m), speed = mean(speed))
+
+## differences in speed of actions between sensorimotor conditions
+levels(ds_s$condition)[levels(ds_s$condition)=="Incongruent"] <- "Opposite"
+m <- aov_ez(id = "ID", dv = "speed", within = "condition", data = ds_s)
+m
+print(summary(m)) # degrees of freedom: levels - 1,  (subjects - 1) * (levels - 1)
+
+#post-hoc comparisons
+em <- emmeans(m, ~ condition)
+print(em)
+em_pairs <- pairs(em, adjust = "Bonferroni") 
+print(em_pairs)
+
+# visualise results
+xyplot(speed ~ condition, group = ID, data = ds_s, ylab = "speed of manual action", ty=c("l", "p"), ylim = c(0,2.3), panel = function(x, y, ...) {
+       panel.xyplot(x, y, ..., alpha = 0.7, lwd = 1.3)
+       panel.linejoin(x, y, fun = mean, horizontal = FALSE,
+       col= mcol, lty=1, lwd=6)})
+
+
+
+# speed & performance at different sensorimotor conditions
+dt <- ds_s 
+par(mar=c(2.1,2.1,1.1,1.1),mfrow=c(2,2))
+
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+
+print(c)
+
+print(shapiro.test(dc$speed))
+test <- shapiro.test(dc$speed)
+norm1 <- (test$p.value > 0.05)
+
+print(shapiro.test(dc$hits))
+test <- shapiro.test(dc$hits)
+norm2 <- (test$p.value > 0.05)
+
+ifelse((norm1 == FALSE | norm2 == FALSE), R_method <- "spearman", R_method <- "pearson")
+cor <- cor.test(dc$speed, dc$hits, method = R_method, exact = F)
+print(cor)
+p_val <- round(cor$p.value, 3)
+
+p <- scatter.smooth(dc$speed, dc$hits, ylim = c(0,18), main = paste(c, " p =", p_val), xlab = "Speed", ylab = "Hits on target")
+p
+}
+
+# general comparisons of speed at different tasks
+dss_ID_speed <- dss_speed %>% group_by(ID) %>% dplyr::summarize(s_speed = mean(speed))
+dmm_ID_speed <- dmm_speed %>% group_by(ID) %>% dplyr::summarize(m_speed = mean(speed))
+ID_speed <- merge(dss_ID_speed, dmm_ID_speed, by = "ID")
+mean(ID_speed$s_speed)
+mean(ID_speed$m_speed)
+t.test(ID_speed$m_speed, ID_speed$s_speed, paired = T)
+
+```
+
+<a name="S8"></a>
+&nbsp;
+
+#####**8. Merging CFS and Sensorimotor Mastery data** 
+
+```{r}
+
+# general
+dmm <- dm %>% group_by(ID, block, condition) %>% dplyr::summarize(dist = median(distance))
+dt <- dmm
+
+### STATIC - target num
+dss <- ds %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+
+dss <- dss %>% group_by(ID, block, condition) %>% dplyr::summarize(hits = mean(target_num))
+
+ddd <- dd  %>% group_by(ID, condition) %>% dplyr::summarize(d_md = mean(d_md), hits = mean(hits))
+
+# ID level
+tot <- merge(cfs_ID, ddd, by = c("ID", "condition"))
+colnames(tot)[6] <- "dist" # distance from Moving Target version
+#write.table(tot, file = "smcvr_cfs_sm_data_ID.csv" )
+
+# blocks level
+tot_blocks <- merge(cfs, dd, by = c("ID", "condition", "block"))
+colnames(tot_blocks)[8] <- "dist" # distance from Moving Target version
+tot_blocks <- select(tot_blocks, -c("d_m"))
+#write.table(tot_blocks, file = "smcvr_cfs_sm_data_blocks.csv" )
+
+
+```
+
+

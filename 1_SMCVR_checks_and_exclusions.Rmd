@@ -1,0 +1,303 @@
+---
+title: <font size="5">**SMCVR -- Checks and exclusions**</font> 
+author: <br> <font size="4"> Pawel Motyka (Polish Academy of Sciences) </font> <br>  *pmotyka@psych.pan.pl* 
+date: <font size="3"> September 2022  </font>
+output: html_document
+chunk_output_type: console
+
+--- 
+&nbsp;
+<font size="4">
+**List of sections**:
+
+1. Load the required packages and data (CFS & Sensorimotor Mastery tasks) [S1](#S1)
+2. CFS - check the data with respect to the preregistered exclusion criteria [S2](#S2)
+3. CFS - additional checks [S3](#S3)
+4. Sensorimotor Mastery Tasks - check the data with respect to the preregistered exclusion criteria [S4](#S4)
+
+<a name="S1"></a>
+&nbsp;
+
+#####**1. Load the required packages and data (CFS & Sensorimotor Mastery tasks)** 
+
+```{r, message = FALSE, warning = FALSE}
+
+# load packages
+library(here, warn.conflicts = FALSE, quietly=TRUE)
+library(dplyr, warn.conflicts = FALSE, quietly=TRUE)
+library(lattice, warn.conflicts = FALSE, quietly=TRUE)
+library(afex, warn.conflicts = FALSE, quietly=TRUE)
+library(emmeans, warn.conflicts = FALSE, quietly=TRUE)
+
+# set working directory
+data_dir <- paste0(here(),"/_data")
+setwd(data_dir)
+options(Encoding="UTF-8")
+
+# specify ID list
+ID_list <- c(1:48)
+
+# read individual data within the loop
+data <- NULL
+for (ID in ID_list) {
+#print(ID)
+log <- read.csv(paste('SMCVR_CFS_', ID, '.csv', sep=''), header = TRUE, sep = ",") 
+data <- rbind(data, log)
+}
+
+# remove training trials
+data <- data[data$training == "False",]
+rm(log)
+
+# Read preprocessed data (takes a while)
+#SMC_moving <- read.table(file = "smcvr_smc_moving.csv")
+#SMC_static <- read.table(file = "smcvr_smc_static.csv")
+
+# Optional step: recreate preprocessed data by reading individual data files within the loop (to do this, change F to T)
+Read_raw_data = T 
+
+if (Read_raw_data == T) {
+
+ID_list <- c(1:48)
+dm <- NULL
+ds <- NULL
+for (ID in ID_list) {
+#print(ID)
+
+log_dm <- read.csv(paste('SMCVR_SMC_moving_', ID, '.csv', sep=''), header = TRUE, sep = ",") 
+
+log_ds <- read.csv(paste('SMCVR_SMC_static_', ID, '.csv', sep=''), header = TRUE, sep = ",") 
+
+dm <- rbind(dm, log_dm)
+ds <- rbind(ds, log_ds)
+}
+
+# remove training trials
+dm <- dm[dm$training == "False",]
+ds <- ds[ds$training == "False",]
+
+write.table(dm, file = "smcvr_smc_moving.csv" )
+write.table(ds, file = "smcvr_smc_static.csv" ) 
+}
+
+# get demographic data
+demo <- data %>%
+    group_by(ID) %>%  
+    slice(1) %>%
+    select(ID,age,sex,eye_d)
+
+# composition
+length(demo$ID[demo$sex == "Male"])
+length(demo$ID[demo$sex == "Female"])
+
+# age
+mean(demo$age)
+sd(demo$age)
+range(demo$age)
+
+# dominant eye
+length(demo$ID[demo$eye_d == "Left"])
+length(demo$ID[demo$eye_d == "Right"])
+rm(demo)
+
+```
+
+<a name="S2"></a>
+&nbsp;
+
+#####**2. CFS - check the data with respect to the preregistered exclusion criteria** 
+
+```{r}
+
+### Criterion (a) "More than 45% of trials with no detection in any of the four conditions (i.e., particular objects). Justification: this would indicate extreme perceptual suppression and impinge on the calculation of median detection times for a given participant and condition".
+
+dat = data
+cfs1 <- data.frame(ID = integer(0),
+                  condition = integer(0),
+                  trials_num = integer(0),
+                  detected = integer(0),
+                  proportion = numeric(0))
+
+for (i in unique(dat$ID)) {
+  
+ds <- dat[dat$ID == i,]
+#print(paste("###ID###", i))
+
+for (c in unique(ds$condition)) {
+trials_num <- length(ds$ID[ds$condition == c])
+detected <- length(ds$ID[ds$condition == c & ds$detected == "True"])  
+proportion <- detected/trials_num
+
+cfs1[nrow(cfs1)+1,] <- c(i,c,trials_num,detected, proportion)
+}
+}
+
+# summary (detection)
+cfs1$proportion <- as.numeric(cfs1$proportion)
+mean(cfs1$proportion)
+hist(cfs1$proportion, col = "darkgreen", xlab = "Proportion of trials with detected stimulus", main = NULL)
+
+
+### Criterion (b) "More than 15% of trials with incorrect identification of the reportedly detected objects. Justification: this would suggest that the subject did not pay sufficient attention during the task."
+
+dat = data
+cfs2 <- data.frame(ID = integer(0),
+                  trials_num = integer(0),
+                  incorrectly_identified = integer(0),
+                  proportion = numeric(0))
+
+for (i in unique(dat$ID)) {
+  
+ds <- dat[dat$ID == i,]
+#print(paste("###ID###", i))
+
+trials_num <- length(ds$ID)
+incorrectly_identified <- length(ds$ID[ds$detected == "True" & ds$accuracy == "False"])  
+proportion <- incorrectly_identified/trials_num
+
+cfs2[nrow(cfs2)+1,] <- c(i, trials_num, incorrectly_identified, proportion)
+}
+
+# summary (identification errors)
+mean(cfs2$proportion)
+hist(cfs2$proportion, col = "darkred", xlab = "Proportion of trials with identification errors", main = NULL)
+
+
+### Criterion (c) "Median detection time smaller than 500 ms (all trials considered).Justification: this would indicate unusually weak or no genuine perceptual suppression."
+
+cfs3 <- data %>% group_by(ID) %>% dplyr::summarize(t_md = median(detection))
+
+# summary (detection times)
+mean(cfs3$t_md)
+hist(cfs3$t_md, breaks = 15, col = "darkblue", xlab = "Median detection times", main = NULL)
+
+```
+
+<a name="S3"></a>
+&nbsp;
+
+#####**3. CFS - additional checks** 
+
+```{r}
+
+### Check the counterbalancing - objects x conditions
+pairs1 <- data %>% group_by(ID, condition, obj_type) %>% dplyr::summarize(t_md = median(detection))
+pairs2 <- pairs1[, c(1,2,3)]
+
+pairs <- pairs2 %>% tidyr::pivot_wider(names_from = condition, values_from = obj_type)
+rm(dat)
+rm(ds)
+
+for (o in 1:4) {
+print(length(pairs$ID[pairs$Congruent == o]))
+print(length(pairs$ID[pairs$Incongruent == o]))
+print(length(pairs$ID[pairs$Novel == o]))
+print(length(pairs$ID[pairs$Random == o]))
+}
+
+
+### Proportion of different responses (visual summary)
+dat = data
+cfs <- data.frame(ID = integer(0),
+                  undetected = integer(0),
+                  incorrect = integer(0),
+                  proportion = numeric(0))
+
+for (i in unique(dat$ID)) {
+  
+ds <- dat[dat$ID == i,]
+#print(paste("###ID###", i))
+
+trials_num <- length(ds$ID)
+undetected <- length(ds$ID[ds$detected == "False"])  
+incorrect <- length(ds$ID[ds$detected == "True" & ds$accuracy == "False"])
+proportion <- undetected/trials_num
+
+cfs[nrow(cfs)+1,] <- c(i,undetected, incorrect, proportion)
+
+}
+
+hist(cfs$undetected, breaks = 48, col = "gray20")
+hist(cfs$incorrect, breaks = 48, col = "gray20")
+hist(cfs2$incorrectly_identified, breaks = 48, col = "gray20")
+sum(cfs$undetected)
+
+```
+
+<a name="S4"></a>
+&nbsp;
+
+#####**4. Sensorimotor Mastery Tasks - check the data with respect to the preregistered exclusion criteria** 
+
+```{r}
+
+# Rename Sensorimotor Mastery data
+dm <- SMC_moving
+ds <- SMC_static
+
+### Criterion d) Excessively slow or fast velocity of the manual actions during the sensorimotor mastery tasks defined as the average speed outside the expected range signalled by the display of warnings (i.e., lower than 0.25 degrees/frame or higher than 3 degrees/frame).
+
+# Moving Target Version
+
+dm_speed <- dm %>%
+    #For each Class
+    group_by(ID) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+
+dm_speed <- select(dm_speed, ID, speed_average)
+
+hist(dm_speed$speed_average, breaks = 20, xlim = c(0.2, 3), col = "darkorange", xlab = "Moving Target - speed of action", main = NULL)
+
+# Static Target Version
+
+ds_speed <- ds %>%
+    #For each Class
+    group_by(ID) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+
+ds_speed <- select(ds_speed, ID, speed_average)
+
+hist(ds_speed$speed_average, breaks = 20, xlim = c(0.2, 3), col = "darkorange", xlab = "Static Target - speed of action", main = NULL)
+
+
+### Criterion e) No better performance in the congruent condition as compared to other conditions (taken together) during the sensorimotor mastery tasks. Justification: meeting criteria d) and/or e) would suggest that the participant did not pay sufficient attention during the tasks.
+
+# Moving Target Version
+
+dmm <- dm %>% group_by(ID, block, condition) %>% dplyr::summarize(d_m = mean(distance), d_md = median(distance))
+
+dt <- dmm
+
+dt <- dt %>% group_by(ID, condition) %>% dplyr::summarize(d_md = median(d_md))
+
+dt <- dt %>% tidyr::pivot_wider(names_from = condition, values_from = d_md)
+
+dt$exclusion <- dt$Congruent > mean(c(dt$Incongruent, dt$Novel, dt$Random))
+
+# additional check: better performance in the Novel than the Random condition
+dt$novel_learned <- dt$Novel < dt$Random
+dt$novel_learned2 <- dt$Random - dt$Novel
+#hist(dt$novel_learned2)
+
+# Static Target Version
+dss <- ds %>%
+    group_by(ID, block, trial) %>%  
+    arrange(desc(timestamp)) %>% 
+    slice(1)
+
+dss <- dss %>% group_by(ID, condition) %>% dplyr::summarize(h_m = mean(target_num))
+
+dt <- dss %>% tidyr::pivot_wider(names_from = condition, values_from = h_m)
+
+dt$exclusion <- dt$Congruent <= mean(c(dt$Incongruent, dt$Novel, dt$Random))
+
+# additional check: better performance in the Novel than the Random condition
+dt$novel_learned <- dt$Novel > dt$Random
+dt$novel_learned2 <- dt$Novel - dt$Random
+#hist(dt$novel_learned2)
+
+```
+
+

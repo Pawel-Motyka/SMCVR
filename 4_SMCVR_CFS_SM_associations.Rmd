@@ -1,0 +1,466 @@
+---
+title: <font size="5">**SMCVR -- Continuous Flash Suppression & Sensorimotor Mastery - associations**</font> 
+author: <br> <font size="4"> Pawel Motyka (Polish Academy of Sciences) </font> <br>  *pmotyka@psych.pan.pl* 
+date: <font size="3"> September 2022  </font>
+output: html_document
+chunk_output_type: console
+editor_options: 
+  chunk_output_type: console
+--- 
+&nbsp;
+<font size="4">
+**List of sections**:
+
+1. Load the required packages and data [S1](#S1)
+2. Derive the single sensorimotor performance index [S2](#S2)
+3. Assess associations between sensorimotor performance and detection times - separate conditions [S3](#S3)
+4. Assess associations between sensorimotor performance and detection times - separate conditions and blocks [S4](#S4)
+5. Focus on the novel condition specifically [S5](#S5)
+
+
+<a name="S1"></a>
+&nbsp;
+
+#####**1. Load the required packages and data** 
+
+```{r, message = FALSE, warning = FALSE}
+
+# load packages
+library(here, warn.conflicts = FALSE, quietly=TRUE)
+library(dplyr, warn.conflicts = FALSE, quietly=TRUE)
+library(lattice, warn.conflicts = FALSE, quietly=TRUE)
+library(afex, warn.conflicts = FALSE, quietly=TRUE)
+library(emmeans, warn.conflicts = FALSE, quietly=TRUE)
+library(ggpubr, warn.conflicts = FALSE, quietly=TRUE)
+#library(tidyr, warn.conflicts = FALSE, quietly=TRUE)
+
+# set working directory
+data_dir <- paste0(here(),"/_data")
+setwd(data_dir)
+
+# read preprocessed data 
+dt <- read.table(file = "smcvr_cfs_sm_data_blocks.csv" ) 
+dtS <- read.table(file = "smcvr_cfs_sm_data_ID.csv" )
+
+# recode variables
+levels(dt$condition)[levels(dt$condition)=="Incongruent"] <- "Opposite"
+levels(dtS$condition)[levels(dtS$condition)=="Incongruent"] <- "Opposite"
+dt$dist <- dt$dist * 100 # to cm
+dtS$dist <- dtS$dist * 100 # to cm
+
+
+```
+
+<a name="S2"></a>
+&nbsp;
+
+#####**2. Derive the single sensorimotor perfromance index** 
+
+
+```{r, warning = FALSE}
+
+# According to the preregistration: "If performance measures from both tasks turn out to be highly correlated, a single index (e.g., the average of ranks or standardised values from both tasks) will be determined and used in exploratory analyses".
+
+### Subjects-level
+
+## get average of ranks from Moving and Static Target versions
+
+# Distance rank (Moving Target version)
+dtS$dist_rank <- rank(-dtS$dist)
+scatter.smooth(dtS$dist, dtS$dist_rank)
+
+# Hits rank (Static Target version)
+dtS$hits_rank <- rank(dtS$hits)
+scatter.smooth(dtS$hits, dtS$hits_rank)
+
+# associations between ranks
+for (c in unique(dtS$condition)) {
+dtSC <- dtS[dtS$condition == c,]
+
+# check correlations between ranks
+scatter.smooth(dtSC$dist_rank, dtSC$hits_rank, main = paste0("correlation: ", c))
+cor <- cor.test(dtSC$dist_rank, dtSC$hits_rank, method = "spearman")
+print(cor) }
+
+# average rank from both tasks
+dtS$mastery <- (dtS$dist_rank + dtS$hits_rank) / 2
+
+# normalize index (0-10)
+dtS$mastery <- ((dtS$mastery - min(dtS$mastery)) / (max(dtS$mastery) - min(dtS$mastery))) * 10
+hist(dtS$mastery, breaks = 20, main = "Sensorimotor Mastery index (subjects-level)")
+
+
+
+### Blocks-level 
+
+## get average of ranks from Moving and Static Target versions
+
+# Distance rank (Moving Target version)
+dt$dist_rank <- rank(-dt$dist)
+scatter.smooth(dt$dist, dt$dist_rank)
+
+# Hits rank (Static Target version)
+dt$hits_rank <- rank(dt$hits)
+scatter.smooth(dt$hits, dt$hits_rank)
+
+# check correlations between ranks
+par(mfrow=c(2,3))
+
+for (c in unique(dt$condition)) {
+  
+dC <- dt[dt$condition == c,]
+
+for (b in unique(dC$block)) {
+  
+dCb <- dC[dC$block == b,]
+  
+print(paste0("condition: ", c, " block: ", b))
+cor <- cor.test(dCb$dist_rank, dCb$hits_rank, method = "spearman")
+p_val <- round(cor$p.value, 3)
+scatter.smooth(dCb$dist_rank, dCb$hits_rank, main = paste0(c, " block:", b, ", p = ", p_val))
+print(cor)
+}
+}
+
+rm(dCb)
+rm(dC)
+rm(cor)
+
+
+### create single index
+
+# average rank from both tasks
+dt$mastery <- (dt$dist_rank + dt$hits_rank) / 2
+
+# normalize ranks (0-10)
+dt$mastery <- ((dt$mastery - min(dt$mastery)) / (max(dt$mastery) - min(dt$mastery))) * 10
+par(mfrow=c(1,1))
+hist(dt$mastery, breaks = 20, main = "Sensorimotor Mastery index (blocks-level)")
+
+
+```
+
+
+
+<a name="S3"></a>
+&nbsp;
+
+#####**3. Assess associations between sensorimotor performance and detection times - separate conditions** 
+
+```{r, warning = FALSE}
+
+par(mar=c(2.1,2.1,1.1,1.1),mfrow=c(2,2))
+
+### General - Sensorimotor Mastery Index
+
+## Normalized detection times
+
+for (c in unique(dtS$condition)) {
+
+dc <- dtS[dtS$condition == c,]
+
+print(c)
+
+print(shapiro.test(dc$time_n))
+test <- shapiro.test(dc$time_n)
+norm1 <- (test$p.value > 0.05)
+
+print(shapiro.test(dc$mastery))
+test <- shapiro.test(dc$mastery)
+norm2 <- (test$p.value > 0.05)
+
+ifelse((norm1 == FALSE | norm2 == FALSE), R_method <- "spearman", R_method <- "pearson")
+
+cor <- cor.test(dc$time_n, dc$mastery, method = R_method)
+p_val <- round(cor$p.value, 3)
+print(cor)
+
+p <- scatter.smooth(dc$mastery,dc$time_n, xlim = c(0,10), main = paste(c, ", p = ", p_val), xlab = "mastery", ylab = "breakthrough time (normalized)")
+p
+}
+
+
+## Raw detection times (additional exploration)
+
+for (c in unique(dtS$condition)) {
+
+dc <- dtS[dtS$condition == c,]
+
+print(c)
+
+print(shapiro.test(dc$time))
+test <- shapiro.test(dc$time)
+norm1 <- (test$p.value > 0.05)
+
+print(shapiro.test(dc$mastery))
+test <- shapiro.test(dc$mastery)
+norm2 <- (test$p.value > 0.05)
+
+ifelse((norm1 == FALSE | norm2 == FALSE), R_method <- "spearman", R_method <- "pearson")
+
+cor <- cor.test(dc$time, dc$mastery, method = R_method)
+p_val <- round(cor$p.value, 3)
+print(cor)
+
+p <- scatter.smooth(dc$mastery,dc$time, xlim = c(0,10), main = paste(c, ", p = ", p_val), xlab = "mastery", ylab = "breakthrough time (s)")
+p
+}
+
+### Optional: check separately for Moving and Static Target Versions (no significant associations)
+
+optional_check = F
+
+if (optional_check == F) {
+  
+# Normalized detection times - Moving Target Version
+
+for (c in unique(dtS$condition)) {
+
+dc <- dtS[dtS$condition == c,]
+
+print(c)
+
+print(shapiro.test(dc$time_n))
+print(shapiro.test(dc$dist))
+cor <- cor.test(dc$time_n, dc$dist, method = "spearman")
+p_val <- round(cor$p.value, 3)
+print(cor)
+
+p <- scatter.smooth(dc$dist,dc$time_n, xlim = c(0,10), main = paste(c, ", p = ", p_val), xlab = "distance", ylab = "breakthrough time (normalized)")
+p
+}
+ 
+# Normalized detection times - Static Target Version
+
+for (c in unique(dtS$condition)) {
+
+dc <- dtS[dtS$condition == c,]
+
+print(c)
+
+print(shapiro.test(dc$time_n))
+print(shapiro.test(dc$hits))
+cor <- cor.test(dc$time_n, dc$hits, method = "spearman")
+print(cor)
+p_val <- round(cor$p.value, 3)
+p <- scatter.smooth(dc$hits,dc$time_n, xlim = c(0,20), main = paste(c, ", p = ", p_val), xlab = "hits", ylab = "breakthrough time (normalized)")
+p
+}
+}
+
+```
+
+
+
+<a name="S4"></a>
+&nbsp;
+
+#####**4. Assess associations between sensorimotor performance and detection times - separate conditions and blocks** 
+
+```{r, warning = FALSE}
+
+par(mfrow=c(2,3))
+
+for (c in unique(dt$condition)) {
+dc <- dt[dt$condition == c,]
+
+for (b in 1:3) {
+  
+dcb <- dc[dc$block == b,]  
+
+print(c)
+print(b)
+
+print(shapiro.test(dcb$time_n))
+test <- shapiro.test(dcb$time_n)
+norm1 <- (test$p.value > 0.05)
+
+print(shapiro.test(dcb$mastery))
+test <- shapiro.test(dcb$mastery)
+norm2 <- (test$p.value > 0.05)
+
+ifelse((norm1 == FALSE | norm2 == FALSE), R_method <- "spearman", R_method <- "pearson")
+
+cor <- cor.test(dcb$mastery, dcb$time_n, method = R_method)
+print(cor)
+p_val <- round(cor$p.value, 3)
+
+m <- scatter.smooth(dcb$mastery, dcb$time_n, xlim = c(0,10), ylim = c(-2,2), main = paste(c, "- block:", b, " p =", p_val))
+}
+}
+
+
+# Plot results for congruent, opposite, and random conditions
+con = rgb(.28,.13,.45, alpha = 0.65)
+opp = rgb(.18,.44,.56, alpha = 0.8)
+nov = rgb(.136,.553,.425, alpha = 0.8)
+ran = rgb(.70,.64,.15, alpha = 0.8)
+
+## Congruent
+# prepare data
+dc <- dt[dt$condition == "Congruent",]
+dc$time_n <- as.numeric(dc$time_n)
+dc$mastery <- as.numeric(dc$mastery)
+dc$block <- as.factor(dc$block)
+
+# specify colours (darkness)
+#nov1 = rgb(.136 * 1.4,.553 * 1.4,.425 * 1.4, alpha = 0.8)
+con1 = rgb(.28 * 1.6,.13 * 1.6,.45 * 1.6, alpha = 0.8)
+con2 = rgb(.28,.13,.45, alpha = 0.8)
+con3 = rgb(.28/2,.13/2,.45/2, alpha = 0.8)
+
+## Plot associations
+sp <- ggscatter(dc, x = "mastery", y = "time_n",
+  ellipse = F, ellipse.level = 0.01, ellipse.type = "t", # norm/euclid #level095
+  ellipse.alpha = 0.2, ellipse.border.remove = T,
+  mean.point = T, mean.point.size = 4,star.plot = F,
+  add = "reg.line",             # Add regression line
+  conf.int = T,                # Add confidence interval
+  color = "block", size = c(1.0), # Color by groups
+  palette = c(con1,con2,con3), 
+  shape = "block") + scale_shape_manual(values=c(19, 15, 17)) 
+sp
+
+
+## Opposite
+# prepare data
+dc <- dt[dt$condition == "Opposite",]
+dc$time_n <- as.numeric(dc$time_n)
+dc$mastery <- as.numeric(dc$mastery)
+dc$block <- as.factor(dc$block)
+
+# specify colours (darkness)
+#nov1 = rgb(.136 * 1.4,.553 * 1.4,.425 * 1.4, alpha = 0.8)
+opp1 = rgb(.18 * 1.4,.44 * 1.4,.56 * 1.4, alpha = 0.8)
+opp2 = rgb(.18,.44,.56, alpha = 0.8)
+opp3 = rgb(.18/2,.44/2,.56/2, alpha = 0.8)
+
+## Plot associations
+sp <- ggscatter(dc, x = "mastery", y = "time_n",
+  ellipse = F, ellipse.level = 0.01, ellipse.type = "t", # norm/euclid #level095
+  ellipse.alpha = 0.2, ellipse.border.remove = T,
+  mean.point = T, mean.point.size = 4,star.plot = F,
+  add = "reg.line",             # Add regression line
+  conf.int = T,                # Add confidence interval
+  color = "block", size = c(1.0), # Color by groups
+  palette = c(opp1,opp2,opp3), 
+  shape = "block") + scale_shape_manual(values=c(19, 15, 17)) 
+sp
+
+
+## Random
+# prepare data
+dc <- dt[dt$condition == "Random",]
+dc$time_n <- as.numeric(dc$time_n)
+dc$mastery <- as.numeric(dc$mastery)
+dc$block <- as.factor(dc$block)
+
+# specify colours (darkness)
+#nov1 = rgb(.136 * 1.4,.553 * 1.4,.425 * 1.4, alpha = 0.8)
+ran1 = rgb(.70 * 1.1,.64 * 1.1,.15 * 1.1, alpha = 0.8)
+ran2 = rgb(.70/1.2,.64/1.2,.15/1.2, alpha = 0.8)
+ran3 = rgb(.70/2,.64/2,.15/2, alpha = 0.8)
+
+## Plot associations
+sp <- ggscatter(dc, x = "mastery", y = "time_n",
+  ellipse = F, ellipse.level = 0.01, ellipse.type = "t", # norm/euclid #level095
+  ellipse.alpha = 0.2, ellipse.border.remove = T,
+  mean.point = T, mean.point.size = 4,star.plot = F,
+  add = "reg.line",             # Add regression line
+  conf.int = T,                # Add confidence interval
+  color = "block", size = c(1.0), # Color by groups
+  palette = c(ran1,ran2,ran3), 
+  shape = "block") + scale_shape_manual(values=c(19, 15, 17)) 
+sp
+
+
+
+```
+
+
+<a name="S5"></a>
+&nbsp;
+
+#####**5. Focus on the novel condition specifically ** 
+
+```{r, warning = FALSE}
+
+# prepare data
+dc <- dt[dt$condition == "Novel",]
+dc$time_n <- as.numeric(dc$time_n)
+dc$mastery <- as.numeric(dc$mastery)
+dc$block <- as.factor(dc$block)
+
+# specify colours (darkness)
+#nov1 = rgb(.136 * 1.4,.553 * 1.4,.425 * 1.4, alpha = 0.8)
+nov1 = rgb(.136 * 1.25,.553 * 1.25,.425 * 1.25, alpha = 0.8)
+nov2 = rgb(.136/1.2,.553/1.2,.425/1.2, alpha = 0.8)
+nov3 = rgb(.136/2,.553/2,.425/2, alpha = 0.8)
+
+
+## Plot associations
+sp <- ggscatter(dc, x = "mastery", y = "time_n",
+  ellipse = F, ellipse.level = 0.01, ellipse.type = "t", # norm/euclid#level095
+  ellipse.alpha = 0.2, ellipse.border.remove = T,
+  mean.point = T, mean.point.size = 4.5,star.plot = F,
+  add = "reg.line",             # Add regression line
+  conf.int = T,                # Add confidence interval
+  color = "block", size = c(1.5), # Color by groups
+  palette = c(nov1,nov2,nov3), 
+  shape = "block") + scale_shape_manual(values=c(19, 15, 17)) 
+sp
+
+# for Fig4e change point sizes: 5 & 1.3 (export 4.7 x 5.5)
+
+## check how many people had a better score than in the random condition
+d <- dtS
+
+d <- dplyr::select(d, ID, condition, mastery)
+d <- tidyr::pivot_wider(d, id_cols = ID, names_from = condition, values_from =  mastery)
+
+d$learned <- (d$Novel > d$Random)
+length(d$ID[d$learned == T])
+
+
+## check the correlation between change in sensorimotor performance (blocks 1-3) and change in detection times (blocks 1-3)
+
+par(mfrow=c(1,1))
+
+# prepare data
+d <- dt[dt$block != 2,]
+d <- d[d$condition == "Novel",]
+d <- select(d, ID, block, condition, time, time_n, mastery)
+d <- tidyr::pivot_wider(d, id_cols = ID, names_from = block, values_from = c(mastery,time,time_n))
+
+## mastery: change between the last and the block
+d$mastery_change <- d$mastery_3 - d$mastery_1
+#hist(d$mastery_change)
+
+## detection times (s): change between the last and first block
+d$time_change <- d$time_3 - d$time_1
+#hist(d$time_change)
+
+## detection times (normalised): change between the last and first block
+d$timeN_change <- d$time_n_3 - d$time_n_1
+#hist(d$timeN_change)
+
+# test normality of variables
+shapiro.test(d$mastery_change)
+shapiro.test(d$time_change)
+shapiro.test(d$timeN_change)
+
+# change in mastery vs change in detection times (s)
+cor.test(d$mastery_change, d$time_change, method = "spearman")
+#scatter.smooth(d$mastery_change, d$time_change)
+
+# change in mastery vs change in detection times (normalised)
+cor.test(d$mastery_change, d$timeN_change, method = "pearson")
+#scatter.smooth(d$mastery_change, d$timeN_change)
+
+```
+
+
+
+
+
+
