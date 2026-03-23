@@ -1,0 +1,35 @@
+{
+  "title": "Data and analysis code: Investigating the role of sensorimotor spatial dependencies in shaping conscious access to virtual 3D objects",
+  "upload_type": "dataset",
+  "publication_date": "2023-06-01",
+  "creators": [
+    {
+      "name": "Motyka, Paweł",
+      "affiliation": "Institute of Psychology, Polish Academy of Sciences; Faculty of Psychology, University of Warsaw",
+      "orcid": "0000-0001-5575-5601"
+    },
+    {
+      "name": "Schwartzman, David J.",
+      "affiliation": "Sussex Centre for Consciousness Science, University of Sussex"
+    },
+    {
+      "name": "Seth, Anil K.",
+      "affiliation": "Sussex Centre for Consciousness Science, University of Sussex; Canadian Institute for Advanced Research"
+    },
+    {
+      "name": "Suzuki, Keisuke",
+      "affiliation": "Sussex Centre for Consciousness Science, University of Sussex; Center for Human Nature, Artificial Intelligence and Neuroscience (CHAIN), Hokkaido University"
+    }
+  ],
+  "description": "Data and analysis code accompanying the study on sensorimotor spatial dependencies and conscious access to virtual 3D objects. Includes raw and preprocessed behavioral data, R analysis scripts, and R Markdown reports.",
+  "keywords": [
+    "sensorimotor dependencies",
+    "visual awareness",
+    "continuous flash suppression",
+    "virtual reality",
+    "action",
+    "perceptual experience"
+  ],
+  "license": "CC-BY-4.0",
+  "access_right": "open",
+  "language": "eng" }
