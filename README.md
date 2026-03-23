@@ -3,9 +3,9 @@
 Paweł Motyka<sup>1</sup> <sup>2</sup>, David J. Schwartzman<sup>3</sup>, Anil K. Seth<sup>3</sup> <sup>4</sup>, Keisuke Suzuki<sup>3</sup> <sup>5</sup>
 <br/>
 <br/>
-<sup>1</sup>Faculty of Psychology, University of Warsaw, Poland <br/>
-<sup>2</sup>Institute of Psychology, Polish Academy of Sciences, Poland <br/>
-<sup>3</sup>Sussex Centre for Consciousness Science, School of Engineering and Informatics, University of Sussex, United Kingdom <br/>
+<sup>1</sup> Institute of Psychology, Polish Academy of Sciences, Poland <br/>
+<sup>2</sup> Faculty of Psychology, University of Warsaw, Poland <br/>
+<sup>3</sup> Sussex Centre for Consciousness Science, School of Engineering and Informatics, University of Sussex, United Kingdom <br/>
 <sup>4</sup>Program on Brain, Mind, and Consciousness, Canadian Institute for Advanced Research, Canada <br/>
 <sup>5</sup>Center for Human Nature, Artificial Intelligence and Neuroscience (CHAIN), Hokkaido University, Japan <br/>
 Corresponding author: Paweł Motyka, e-mail: pmotyka@psych.pan.pl 
@@ -33,5 +33,5 @@ The folder “_figures” will contain the main and supplementary plots.
 
 R Markdown reports (HTML files) present all the code files used along with their outputs.
 
-
+Licence: CC-BY 4.0.
 
