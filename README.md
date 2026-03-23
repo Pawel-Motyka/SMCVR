@@ -6,8 +6,8 @@ Paweł Motyka<sup>1</sup> <sup>2</sup>, David J. Schwartzman<sup>3</sup>, Anil K
 <sup>1</sup> Institute of Psychology, Polish Academy of Sciences, Poland <br/>
 <sup>2</sup> Faculty of Psychology, University of Warsaw, Poland <br/>
 <sup>3</sup> Sussex Centre for Consciousness Science, School of Engineering and Informatics, University of Sussex, United Kingdom <br/>
-<sup>4</sup>Program on Brain, Mind, and Consciousness, Canadian Institute for Advanced Research, Canada <br/>
-<sup>5</sup>Center for Human Nature, Artificial Intelligence and Neuroscience (CHAIN), Hokkaido University, Japan <br/>
+<sup>4</sup> Program on Brain, Mind, and Consciousness, Canadian Institute for Advanced Research, Canada <br/>
+<sup>5</sup> Center for Human Nature, Artificial Intelligence and Neuroscience (CHAIN), Hokkaido University, Japan <br/>
 Corresponding author: Paweł Motyka, e-mail: pmotyka@psych.pan.pl 
 <br/>
 <br/>
